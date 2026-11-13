@@ -18,7 +18,7 @@ class ModuleBoundariesTest {
     static JavaClasses classes;
 
     static List<String> modules() {
-        return List.of("shared", "auth", "app");
+        return List.of("shared", "auth", "audience", "app");
     }
 
     @BeforeAll
@@ -48,7 +48,7 @@ class ModuleBoundariesTest {
     @org.junit.jupiter.api.Test
     void sharedDependsOnNoBusinessModule() {
         noClasses().that().resideInAPackage("com.cep.shared..")
-                .should().dependOnClassesThat().resideInAnyPackage("com.cep.auth..", "com.cep.app..")
+                .should().dependOnClassesThat().resideInAnyPackage("com.cep.auth..", "com.cep.audience..", "com.cep.app..")
                 .check(classes);
     }
 }

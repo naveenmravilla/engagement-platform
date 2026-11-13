@@ -6,7 +6,7 @@ Base path is `/api/v1`. All APIs use JSON. Live OpenAPI is served at `/v3/api-do
 - **Auth:** `X-API-Key` for integration endpoints, `Authorization: Bearer <JWT>` for dashboard endpoints. The tenant is always derived from the credential and never taken from the body.
 - **Idempotency:** `POST`s that create things accept an `Idempotency-Key` header. `/journeys/execute` and `/notifications/send` also use the body's `requestId`, and `/events/ingest` uses `eventId`. A replay with the same key returns the original response. The same key with a different body returns `409 IDEMPOTENCY_KEY_REUSED`.
 - **Errors:** RFC 7807 `application/problem+json`: `{type: "urn:cep:problem:<code>", title, status, detail, code, errors[]?, requestId}`. `X-Request-Id` is echoed or generated on every response.
-- **Integration scopes** (API keys): `journeys:execute`, `events:ingest`, `notifications:send`, `customers:read`, `customers:write`. Responses carry `X-RateLimit-Limit/Remaining`; over-limit → `429` + `Retry-After`.
+- **Integration scopes** (API keys): `journeys:execute`, `events:ingest`, `notifications:send`, `customers:read`, `customers:write`, `audiences:evaluate`. Responses carry `X-RateLimit-Limit/Remaining`; over-limit → `429` + `Retry-After`.
 - **Pagination:** `?page=&size=&sort=` → `{items, page, size, total}`.
 - **Concurrency:** `ETag`/`If-Match` on PUT for audiences, journeys and templates.
 
@@ -14,12 +14,15 @@ Base path is `/api/v1`. All APIs use JSON. Live OpenAPI is served at `/v3/api-do
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| POST | /audiences | JWT MARKETER | `{name?, content}` → `{audienceId:"AUD10001", version:1, status}` |
-| GET | /audiences, /audiences/{id} | JWT VIEWER | `?version=` for history |
-| PUT | /audiences/{id} | JWT MARKETER | new version |
-| POST | /audiences/{id}/activate · /deactivate | JWT MARKETER | |
-| DELETE | /audiences/{id} | JWT ADMIN | soft-deactivate; refused if referenced by an ACTIVE journey |
-| POST | /audiences/{id}/evaluate | JWT/API key | `{customerId}` → `{member:bool, matched:[...], failed:[...]}` |
+| POST | /audiences | JWT MARKETER | `{audienceId?, name?, content}` → `201 {audienceId:"AUD10001", version:1, status:"DRAFT", content, compiledCriteria, …}` + `ETag: "1"`. `audienceId` is generated per tenant unless given. `Idempotency-Key` supported · **implemented** |
+| GET | /audiences | JWT VIEWER | `?status=&q=&page=&size=` → `{items, page, size, total}`. ARCHIVED only with `status=ARCHIVED` · **implemented** |
+| GET | /audiences/{id} | JWT VIEWER | current version, or `?version=N` · **implemented** |
+| GET | /audiences/{id}/versions | JWT VIEWER | version history, newest first · **implemented** |
+| PUT | /audiences/{id} | JWT MARKETER | `{name?, content?}`. Changed content → next version; unchanged → no new version. `If-Match: "<version>"` → `412 VERSION_MISMATCH` if stale · **implemented** |
+| POST | /audiences/{id}/activate · /deactivate | JWT MARKETER | idempotent. Deactivate refused (`409 AUDIENCE_IN_USE`) while an ACTIVE journey uses it · **implemented** |
+| DELETE | /audiences/{id} | JWT ADMIN | archive (soft delete): read-only and hidden from the default list; refused if in use · **implemented** |
+| POST | /audiences/validate | JWT VIEWER | `{content}` → `{valid, compiledCriteria, errors[]}`, nothing saved · **implemented** |
+| POST | /audiences/{id}/evaluate | JWT VIEWER or API key `audiences:evaluate` | `{context}` or `{customerId}` (customerId from Phase 4), optional `version` → `{audienceId, version, status, member, matched:[{path, field, op, value}], failed:[…]}`. API keys get `409 AUDIENCE_NOT_ACTIVE` unless ACTIVE · **implemented** |
 | POST | /journeys | JWT MARKETER | create draft `{name, definition}` |
 | GET | /journeys, /journeys/{id} | JWT VIEWER | draft and published summary |
 | PUT | /journeys/{id} | JWT MARKETER | save draft (returns validation warnings) |

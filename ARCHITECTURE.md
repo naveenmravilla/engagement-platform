@@ -1,6 +1,6 @@
 # Architecture — Customer Engagement Platform (CEP)
 
-Status: Phase 2 complete (decisions in §9). Notification channels: see [NOTIFICATION_CHANNEL_ARCHITECTURE.md](NOTIFICATION_CHANNEL_ARCHITECTURE.md) (D13–D18)
+Status: Phase 3 complete (decisions in §9). Notification channels: see [NOTIFICATION_CHANNEL_ARCHITECTURE.md](NOTIFICATION_CHANNEL_ARCHITECTURE.md) (D13–D18)
 
 ## 1. Goals
 

@@ -60,7 +60,14 @@ JSON rule tree, with JSONPath-like field references into the execution context:
 ```
 Operators: `eq, neq, gt, gte, lt, lte, in, nin, contains, exists, regex, between`. The rule tree is evaluated by an interpreter, never compiled into code or SpEL, so a stored definition cannot inject code.
 
-Audience `content` may use the shorthand from the spec (`{"customerStatus":"ACTIVE"}`), which is compiled to `all` + `eq` on `customer.attributes.*`. The full rule tree is accepted too. Future criteria types (`eventHistory`, `transactions`) are added as new `CriterionEvaluator` beans, and each one can supply a SQL predicate for bulk segment counts.
+Audience `content` may use the shorthand from the spec (`{"customerStatus":"ACTIVE"}`), which is compiled to `all` + `eq` on `customer.attributes.*`. The full rule tree is accepted too.
+
+Implemented in Phase 3 (`audience` module, `RuleCompiler` / `RuleEvaluator`):
+- **Shorthand:** a key is an attribute (`customer.attributes.<key>`) or a full dotted path. A scalar means `eq`, an array means `in`, and an object maps operators to values (`{"age":{"gte":18,"lt":65}}`). Shorthand may also appear inside `all` / `any` / `not`.
+- **Types:** numbers compare numerically, ISO-8601 dates and timestamps chronologically, strings and booleans exactly. There is no implicit conversion (`"10"` is not `10`). A missing or null field fails every operator except `exists`, including `neq` and `nin`.
+- **Limits:** depth 10, 200 conditions, 1,000 list values, regex patterns of 200 characters, content of 64 KB. Regex evaluation has a step budget, so a pathological pattern stops early and does not match.
+- **Field roots** for audiences: `customer`, `event`.
+- **Results** list every condition as matched or failed, with its path in the normalized tree (for example `$.all[1].any[0]`). Future criteria types (`eventHistory`, `transactions`) are added as new `CriterionEvaluator` beans, and each one can supply a SQL predicate for bulk segment counts.
 
 ## 5. Graph validation (at save-draft = warnings, at publish = errors)
 1. JSON Schema of the definition document.

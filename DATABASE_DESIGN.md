@@ -22,12 +22,15 @@ users(id, tenant_id FK, email, password_hash (bcrypt), display_name, roles TEXT[
 
 ### Audience
 ```
-audiences(id, tenant_id, audience_key, name, status[DRAFT|ACTIVE|INACTIVE],
-          current_version INT, created_by, ...)            UNIQUE(tenant_id, audience_key)
-audience_versions(id, audience_id FK, version INT, content JSONB NOT NULL,
-          compiled_criteria JSONB, created_by, created_at) UNIQUE(audience_id, version)
-  GIN index on content
+audiences(id, tenant_id, audience_key, name, status[DRAFT|ACTIVE|INACTIVE|ARCHIVED],
+          current_version INT, created_by, updated_by, created_at, updated_at)
+  UNIQUE(tenant_id, audience_key); index(tenant_id, updated_at DESC); index(tenant_id, status)
+audience_versions(id, tenant_id, audience_id FK, version INT, content JSONB NOT NULL,
+          compiled_criteria JSONB NOT NULL, created_by, created_at) UNIQUE(audience_id, version)
+  GIN index on content (jsonb_path_ops)
+audience_key_counters(tenant_id PK, next_value BIGINT)   -- AUD10001, AUD10002, … per tenant
 ```
+Implemented in Phase 3 (`db/migration/audience/V20261113_0300__audience.sql`). Versions are immutable. ARCHIVED is the soft delete.
 `content` holds the free-form criteria from the spec. `compiled_criteria` is the normalized rule tree that the evaluator uses (see JOURNEY_ENGINE_DESIGN §Audience).
 
 ### Customer

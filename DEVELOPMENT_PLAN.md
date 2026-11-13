@@ -7,7 +7,7 @@ A phase is not marked complete while any test is failing.
 |---|---|---|---|
 | 1 | Repo inspection, architecture, design docs, decisions | Docs written; D1–D4 approved | **Complete** |
 | 2 | Gradle multi-module skeleton, Spring Boot app, Docker build wrapper, Compose (Postgres, Redis), Flyway baseline, `shared` (tenant ctx, errors, outbox, job queue, idempotency), `auth` (API keys, JWT, RBAC), OpenAPI, ArchUnit | `./gradlew build` green in Docker; job queue tests (lease, retry, DLQ, restart) pass | **Complete** |
-| 3 | Audience CRUD, versioning, activation, rule compiler and evaluator, `/evaluate` | API and evaluator tests | Pending |
+| 3 | Audience CRUD, versioning, activation, rule compiler and evaluator, `/evaluate` | API and evaluator tests | **Complete** |
 | 4 | Customer profile (minimal) and Event ingestion: schemas, validation, dedup, async processing | dedup and idempotency tests | Pending |
 | 5 | Journey management: definition schema, graph validator, drafts, publish, versions, node-type registry API | validator test matrix (cycles, orphans, branches) | Pending |
 | 6 | Journey engine: workers, handlers for all 11 node types, waits, retries, pause/resume/cancel, re-entry, event triggers | restart-survival and duplicate-request tests | Pending |
@@ -40,10 +40,31 @@ Also smoke-tested against the running Compose stack (login, key issue, RBAC, DLQ
 
 **Deferred (tracked):** refresh tokens → Phase 7 (needed by UI); housekeeping of DONE jobs / published outbox / old idempotency keys → Phase 12; API-key lookup cache → Phase 12; tenant-provisioning API (platform super-admin) → Phase 12; Prometheus/Grafana containers → Phase 10.
 
+## Phase 3 report
+
+**Delivered:** new `audience` module (API, internal rules, store, service, web). Tables `audiences`, `audience_versions` and `audience_key_counters`. Generated IDs per tenant (`AUD10001`, …) or client-chosen IDs. Immutable versions with `If-Match` / `ETag`. Lifecycle DRAFT → ACTIVE ⇄ INACTIVE → ARCHIVED. Rule compiler (shorthand plus full tree, normalized form, path-level errors) and interpreter (12 operators, typed comparisons, regex step budget). `/validate` and `/evaluate` endpoints. `Idempotency-Key` on create. Audit entries for every change. New API-key scope `audiences:evaluate`.
+
+**Facade for later phases (`com.cep.audience.api`):** `AudienceFacade` (find and evaluate, used by the journey AUDIENCE node), `AudienceSubjectResolver` (customer module, Phase 4, enables `{customerId}` on `/evaluate`) and `AudienceUsageChecker` (journey management, Phase 5, blocks deactivate and archive while an ACTIVE journey uses the audience).
+
+**Verification:** `./gw build` passes 110 tests (56 new rule-engine unit tests, 12 new `AudienceIT` integration tests, plus the 42 existing ones):
+
+| Suite | Proves |
+|---|---|
+| `RuleCompilerTest` (26) | shorthand and full-tree compile; normalized form recompiles to itself; every invalid input reported with its path; depth and condition limits |
+| `RuleEvaluatorTest` (30) | each operator, number / date / string typing, missing and null fields, groups and `not`, matched / failed paths, catastrophic regex cut off |
+| `AudienceIT` (12) | sequential IDs; client IDs and duplicates; 422 with field paths; idempotent create; versions, stale `If-Match` → 412, no-op updates, history; lifecycle and archive (ADMIN only); roles; evaluate by context, by old version and through the facade; API-key scope and ACTIVE check; validate saves nothing; **tenant isolation** with per-tenant numbering |
+| `ModuleBoundariesTest` (9) | `audience.internal` is private; `shared` does not depend on `audience` |
+
+Also smoke-tested on the running Compose stack: the migration applied cleanly to the existing Phase 2 database (schema 20261112.0200 → 20261113.0300), and create, activate, evaluate, the 422 error and the OpenAPI paths all work.
+
+**Bug found and fixed:** `backend/Dockerfile` copied modules by name, so the image build failed without `audience`. It now copies `audience` too. Every new module must be added there.
+
+**Deferred:** `{customerId}` on `/evaluate` → Phase 4. "In use by an ACTIVE journey" checks → Phase 5. Bulk segment counts (SQL predicates) → later, when needed.
+
 ## Acceptance criteria traceability (filled in as tests land)
 | Criterion | Test |
 |---|---|
-| Create audience (ID + JSON content) | — |
+| Create audience (ID + JSON content) | `AudienceIT.createGeneratesSequentialIdsAndStartsAsDraftVersionOne`, `clientChosenIdIsKeptAndDuplicatesAreRejected` |
 | Build journey visually (START, AUDIENCE, SMS, WAIT, PUSH, APP_INBOX, END) | — |
 | Publish | — |
 | Submit API request; resolve customer and audience; start correct version | — |

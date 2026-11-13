@@ -7,6 +7,7 @@ COPY gradle gradle
 COPY buildSrc buildSrc
 COPY shared shared
 COPY auth auth
+COPY audience audience
 COPY app app
 RUN --mount=type=cache,target=/root/.gradle ./gradlew --no-daemon --console=plain :app:bootJar -x test \
  && java -Djarmode=tools -jar app/build/libs/cep-app.jar extract --layers --launcher --destination /extracted
