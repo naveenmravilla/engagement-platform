@@ -1,0 +1,13 @@
+cep:
+  security:
+    jwt-secret: test-only-secret-not-for-production-0123456789
+    login-attempts-per-minute: 1000
+  bootstrap:
+    tenant-key: default
+    admin-email: admin@test.local
+    admin-password: Adm1n-Passw0rd-Test
+  # Tests drive workers and the relay deterministically via runOnce()/drain().
+  jobs:
+    worker-enabled: false
+  outbox:
+    relay-enabled: false

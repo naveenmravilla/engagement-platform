@@ -1,0 +1,83 @@
+flowchart LR
+  NM["<b>NM</b><br/>Notification Manager<br/>(upstream trigger)"]
+
+  subgraph CORE["M1AIAlert (shared up to channel decision only)"]
+    direction TB
+    TRG["Trigger API<br/>POST /api/v1/alerts/trigger<br/>auth · idempotency · correlationId = nmRequestId"]
+    EVAL["Campaign evaluation<br/>audience · consent · caps · template<br/><b>→ channel decision</b>"]
+    TRG --> EVAL
+  end
+
+  NM == "S1 · P1 · I1<br/>REST trigger event" ==> TRG
+
+  subgraph LSMS["① SMS: sent by NM through its SMS Gateway"]
+    direction LR
+    SMSC["SMS channel<br/>NmSmsWebhookChannel"]
+    NMCB["<b>NM</b> SMS processing<br/>S5 receive · match correlationId<br/>S6 transaction status · delivery tracking"]
+    GWY["SMS Gateway<br/>(connected to NM)"]
+    SNOTE["✗ M1AIAlert never connects to the SMS Gateway<br/>✗ no SMS webhook to MyM1+ or MS APIs<br/>✗ NM is never bypassed for SMS"]
+    SMSC == "S3–S4 SMS webhook<br/>send SMS + correlationId + notificationId<br/>(HMAC, retried, idempotent)" ==> NMCB
+    NMCB -- "submit SMS" --> GWY
+    GWY -- "submit ack · DLR" --> NMCB
+  end
+
+  subgraph LPUSH["② Push: delivered directly to MyM1+, not via NM"]
+    direction LR
+    PUSHC["Push channel<br/>FcmPushChannel"]
+    DEVREG[("Device token registry<br/>register · refresh · deactivate")]
+    FCM["Firebase<br/>FCM HTTP v1"]
+    APPP["<b>MyM1+</b> (M1AIAlert SDK + Firebase SDK)<br/>P5 receive · P6 display · tap · deep link · analytics<br/>foreground · background · terminated"]
+    PNOTE["✗ no NM after the 202 response<br/>✗ no MS Store Messages"]
+    PUSHC -. "active tokens" .-> DEVREG
+    PUSHC == "P3 messages:send" ==> FCM
+    FCM == "P4 deliver" ==> APPP
+    APPP -- "token lifecycle" --> DEVREG
+  end
+
+  subgraph LINB["③ App Inbox: stored in MS APIs, managed by MyM1+"]
+    direction LR
+    INBC["App Inbox channel<br/>MsInboxChannel"]
+    subgraph MS["MS APIs (system of record)"]
+      direction TB
+      STORE["Store Messages API"]
+      FETCH["Fetch All Messages API"]
+      READ["Read Messages API"]
+      UNREAD["Fetch Unread Count API"]
+      MSDB[("Inbox store<br/>messages + read/unread")]
+      STORE -- "I4 validate + persist" --> MSDB
+      FETCH --- MSDB
+      READ --- MSDB
+      UNREAD --- MSDB
+    end
+    APPI["<b>MyM1+</b><br/>App Inbox UI"]
+    INOTE["✗ no inbox storage via NM<br/>✗ no inbox tables in M1AIAlert"]
+    INBC == "I3 outbound webhook<br/>Idempotency-Key = notificationId" ==> STORE
+    APPI -- "I5 fetch all" --> FETCH
+    FETCH -- "I6 messages + read/unread" --> APPI
+    APPI -- "I7 mark read" --> READ
+    APPI -- "I8 unread count" --> UNREAD
+  end
+
+  EVAL == "S2 channel = SMS" ==> SMSC
+  EVAL == "P2 channel = PUSH" ==> PUSHC
+  EVAL == "I2 channel = APP_INBOX" ==> INBC
+
+  classDef ext fill:#f3f4f6,stroke:#6b7280,color:#111827;
+  classDef nm fill:#fee2e2,stroke:#b91c1c,color:#111827;
+  classDef core fill:#ede9fe,stroke:#6d28d9,color:#111827;
+  classDef sms fill:#fde68a,stroke:#b45309,color:#111827;
+  classDef push fill:#bfdbfe,stroke:#1d4ed8,color:#111827;
+  classDef inbox fill:#bbf7d0,stroke:#15803d,color:#111827;
+  classDef note fill:#ffffff,stroke:#9ca3af,stroke-dasharray:4 3,color:#374151,font-size:12px;
+  class NM,NMCB nm;
+  class TRG,EVAL core;
+  class SMSC sms;
+  class PUSHC,DEVREG push;
+  class INBC inbox;
+  class GWY,FCM,APPP,APPI,STORE,FETCH,READ,UNREAD,MSDB ext;
+  class SNOTE,PNOTE,INOTE note;
+  style LSMS fill:#fffbeb,stroke:#b45309
+  style LPUSH fill:#eff6ff,stroke:#1d4ed8
+  style LINB fill:#f0fdf4,stroke:#15803d
+  style MS fill:#ffffff,stroke:#15803d
+  style CORE fill:#faf5ff,stroke:#6d28d9

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Runs the Gradle wrapper inside a JDK 21 container (decision D3: no host JDK required).
+# Usage: ./gw build | ./gw test --tests '*JobQueue*' | ./gw :app:bootRun
+# Mounts the Docker socket so Testcontainers can start Postgres/Redis for integration tests.
+set -euo pipefail
+cd "$(dirname "$0")"
+
+IMAGE="${CEP_JDK_IMAGE:-eclipse-temurin:21-jdk}"
+CACHE="${CEP_GRADLE_HOME:-$HOME/.cache/cep-gradle}"
+SOCK="${DOCKER_SOCK:-/var/run/docker.sock}"
+mkdir -p "$CACHE"
+
+TTY=(); [ -t 1 ] && TTY=(-t)
+exec docker run --rm "${TTY[@]}" \
+  --network host \
+  -u "$(id -u):$(id -g)" --group-add "$(stat -c %g "$SOCK")" \
+  -e HOME=/tmp -e GRADLE_USER_HOME=/gradle-home \
+  -e TESTCONTAINERS_RYUK_DISABLED="${TESTCONTAINERS_RYUK_DISABLED:-false}" \
+  -v "$SOCK":/var/run/docker.sock \
+  -v "$CACHE":/gradle-home \
+  -v "$PWD":/workspace -w /workspace \
+  "$IMAGE" ./gradlew --console=plain "$@"

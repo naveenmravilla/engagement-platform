@@ -1,0 +1,19 @@
+# build outputs
+build/
+.gradle/
+backend/buildSrc/.kotlin/
+node_modules/
+dist/
+*.class
+*.log
+
+# local secrets / env
+.env
+*.pem
+*.key
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.DS_Store

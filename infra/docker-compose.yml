@@ -1,0 +1,60 @@
+# Local / single-host stack. Secrets come from infra/.env (copy .env.example); nothing sensitive is defaulted.
+name: cep
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cep
+      POSTGRES_USER: cep
+      POSTGRES_PASSWORD: ${CEP_DB_PASSWORD:?set CEP_DB_PASSWORD in infra/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cep -d cep"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "${CEP_REDIS_PASSWORD:?set CEP_REDIS_PASSWORD in infra/.env}", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    environment:
+      REDIS_PASSWORD: ${CEP_REDIS_PASSWORD}
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ../backend
+    image: cep-app:local
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      CEP_DB_URL: jdbc:postgresql://postgres:5432/cep
+      CEP_DB_USER: cep
+      CEP_DB_PASSWORD: ${CEP_DB_PASSWORD}
+      CEP_REDIS_HOST: redis
+      CEP_REDIS_PASSWORD: ${CEP_REDIS_PASSWORD}
+      CEP_JWT_SECRET: ${CEP_JWT_SECRET:?set CEP_JWT_SECRET (>=32 bytes) in infra/.env}
+      CEP_BOOTSTRAP_TENANT: ${CEP_BOOTSTRAP_TENANT:-default}
+      CEP_BOOTSTRAP_ADMIN_EMAIL: ${CEP_BOOTSTRAP_ADMIN_EMAIL:-}
+      CEP_BOOTSTRAP_ADMIN_PASSWORD: ${CEP_BOOTSTRAP_ADMIN_PASSWORD:-}
+      CEP_LOG_FORMAT: logstash
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60
+    ports:
+      - "127.0.0.1:${CEP_HTTP_PORT:-8080}:8080"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
