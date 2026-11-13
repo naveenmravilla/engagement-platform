@@ -41,6 +41,10 @@ Rendered images: [`diagrams/channel-e2e.svg`](diagrams/channel-e2e.svg) (end-to-
 
 ## 3. Overview
 
+![Channel overview](diagrams/channel-overview.png)
+
+<details><summary>Mermaid source</summary>
+
 ```mermaid
 flowchart LR
   NM["NM<br/>Notification Manager<br/>(upstream)"]
@@ -84,11 +88,17 @@ flowchart LR
   class INBC inbox;
 ```
 
+</details>
+
 The three channels share only the trigger API and campaign evaluation. Everything after the channel decision is separate.
 
 ## 3a. End-to-end architecture (numbered steps)
 
 Step numbers match the required flows: **S1–S6** for SMS, **P1–P6** for Push and **I1–I8** for App Inbox. Each lane also lists what that channel must not do. The source is [`diagrams/channel-e2e.mmd`](diagrams/channel-e2e.mmd) and the rendered image is [`diagrams/channel-e2e.svg`](diagrams/channel-e2e.svg) (or [`.png`](diagrams/channel-e2e.png)).
+
+![End-to-end architecture: SMS, Push and App Inbox](diagrams/channel-e2e.png)
+
+<details><summary>Mermaid source</summary>
 
 ```mermaid
 flowchart LR
@@ -176,9 +186,15 @@ flowchart LR
   style CORE fill:#faf5ff,stroke:#6d28d9
 ```
 
+</details>
+
 ## 4. Sequence diagrams
 
 ### 4.1 SMS: NM → M1AIAlert → SMS webhook → NM → SMS Gateway
+
+![SMS sequence](diagrams/channel-sms.png)
+
+<details><summary>Mermaid source</summary>
 
 ```mermaid
 sequenceDiagram
@@ -220,7 +236,13 @@ sequenceDiagram
   Note over SC,GW: M1AIAlert has no connection to the SMS Gateway. NM sends the SMS and owns DLRs,<br/>transaction status and delivery tracking. NM only acknowledges receipt: no status comes back to M1AIAlert. Webhook calls to NM go through the webhook.call queue:<br/>retried with backoff, idempotent on notificationId, DLQ when retries run out. Never sent to MyM1+ or MS APIs.
 ```
 
+</details>
+
 ### 4.2 Push: NM → M1AIAlert → Firebase → MyM1+
+
+![Push sequence](diagrams/channel-push.png)
+
+<details><summary>Mermaid source</summary>
 
 ```mermaid
 sequenceDiagram
@@ -279,7 +301,13 @@ sequenceDiagram
   API->>DB: status OPENED · analytics
 ```
 
+</details>
+
 ### 4.3 App Inbox: NM → M1AIAlert → MS Store Messages → MyM1+
+
+![App Inbox sequence](diagrams/channel-inbox.png)
+
+<details><summary>Mermaid source</summary>
 
 ```mermaid
 sequenceDiagram
@@ -327,6 +355,8 @@ sequenceDiagram
     APP->>API: SDK event: inbox_message_read {notificationId}
   end
 ```
+
+</details>
 
 ## 5. Channel ownership rules
 

@@ -4,6 +4,10 @@ This page has three views: the system components (§1), a single request traced 
 
 ## 1. System view
 
+![System view](diagrams/architecture-1.png)
+
+<details><summary>Mermaid source</summary>
+
 ```mermaid
 flowchart LR
   %% ---------- Actors ----------
@@ -133,9 +137,15 @@ flowchart LR
   class TRG,PIPE,SMSC,PUSHC,INBC notif;
 ```
 
+</details>
+
 ## 2. Request lifecycle: the acceptance scenario
 
 This traces one request. The journey is START → AUDIENCE → SMS → WAIT 30m → PUSH → APP_INBOX → END.
+
+![Request lifecycle](diagrams/architecture-2.png)
+
+<details><summary>Mermaid source</summary>
 
 ```mermaid
 sequenceDiagram
@@ -184,7 +194,13 @@ sequenceDiagram
   Note over App,P: The dashboard reads GET /executions/{id} for the step timeline and notification status.
 ```
 
+</details>
+
 ## 3. Deployment view (Docker Compose, v1)
+
+![Deployment view](diagrams/architecture-3.png)
+
+<details><summary>Mermaid source</summary>
 
 ```mermaid
 flowchart LR
@@ -198,5 +214,7 @@ flowchart LR
   U["Browser"] --> WEB
   X["External apps"] --> API
 ```
+
+</details>
 
 When load requires it, `cep-app` can be scaled to several replicas. Workers coordinate only through the database (`SKIP LOCKED` leases and advisory locks), so no other changes are needed. The outbox relay is the place where Kafka would be added later.
