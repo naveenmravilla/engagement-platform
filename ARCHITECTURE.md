@@ -1,6 +1,6 @@
 # Architecture — Customer Engagement Platform (CEP)
 
-Status: Phase 2 complete (decisions in §9)
+Status: Phase 2 complete (decisions in §9). Notification channels: see [NOTIFICATION_CHANNEL_ARCHITECTURE.md](NOTIFICATION_CHANNEL_ARCHITECTURE.md) (D13–D18)
 
 ## 1. Goals
 
@@ -8,7 +8,7 @@ An event-driven, multi-tenant platform for:
 
 1. **Audience Management**: flexible JSON audience definitions, versioning, and membership evaluation.
 2. **Hybrid Journey Builder and Execution Engine**: business users design journeys visually in React Flow. External apps trigger them over an API. One generic engine interprets the published JSON graph.
-3. **Centralized Notification Manager**: the single path for SMS, Push and App Inbox delivery.
+3. **Channel Dispatcher** (D13, formerly "Notification Manager"): triggered by the external **NM** over REST. Campaign evaluation is shared, and then each channel has its own path (D14): **SMS** is handed to NM, which sends it through its SMS Gateway; **Push** goes through Firebase (FCM) directly to MyM1+; **App Inbox** is stored in the MS APIs. There is no generic notification webhook.
 
 Core rule: **no journey-specific code.** Journeys are data. The engine interprets them through a pluggable node registry.
 
@@ -42,12 +42,13 @@ The first release is one deployable Spring Boot application split into Gradle mo
                                               │ notification request (outbox)      │
                                               ▼                                    │
                                ┌────────────────────────────┐                      │
-                               │   Notification Manager      ├──────────────────────┘
-                               │ consent·suppress·cap·route  │
+                               │   Channel Dispatcher (D13)  ├──────────────────────┘
+                               │ consent·suppress·cap·render │◄── NM trigger (REST)
                                └──────┬────────┬────────┬────┘
                                       ▼        ▼        ▼
-                                   SMS      Push     App Inbox     (ProviderAdapter SPI;
-                                  (mock)   (mock)   (first-party)   mocks only in v1)
+                                   SMS      Push     App Inbox     (separate ChannelAdapters, D14;
+                                  → NM     → FCM    → MS Store       mock impl in local/test, D16)
+                                (webhook)  → MyM1+   Messages
 
          Shared: Postgres (system of record + durable job queue) · Redis (rate limit, caps, locks)
          Observability: Micrometer → Prometheus → Grafana · JSON structured logs with traceId
@@ -66,7 +67,7 @@ The first release is one deployable Spring Boot application split into Gradle mo
 | `journey-mgmt` | Drafts, graph validation, publish/pause, version history | `journeys`, `journey_versions`, `journey_nodes`, `journey_connections` |
 | `journey-engine` | Execution instances, node registry, workers, waits, retries, re-entry | `journey_executions`, `journey_execution_steps` |
 | `template` | Channel templates, versioning, variable schema, rendering | `templates` |
-| `notification` | Notification pipeline, provider adapters, delivery lifecycle, inbox | `notification_requests`, `notification_delivery_logs`, `inbox_messages`, `provider_configurations` |
+| `notification` | Channel Dispatcher: NM trigger API, campaign evaluation pipeline, SMS / Push / App Inbox channel adapters, delivery status. App Inbox storage belongs to the MS APIs (D15) | `notification_requests`, `notification_delivery_logs`, `provider_configurations` |
 | `analytics` | Read-model aggregates: journey funnels, delivery stats, dashboards | `analytics_daily_*` (materialized) |
 | `app` | Spring Boot entry point, security config, OpenAPI, actuator | — |
 
@@ -129,9 +130,15 @@ The audience check runs inside the journey as an `AUDIENCE` node, so it is versi
 | D4 | Gradle Kotlin DSL multi-module build | Approved |
 | D5 | Modular monolith with ArchUnit-enforced boundaries | Proposed (spec permits) |
 | D6 | Journey graphs are DAGs in v1; loops are not supported | Proposed |
-| D7 | Only mock provider adapters; real-provider adapters require explicit approval | Per spec |
+| D7 | Only mock provider adapters; real-provider adapters require explicit approval | **Superseded by D16** |
 | D8 | Spring Boot **4.1.2** + Gradle 9.9.1 (Boot 3.5 left OSS support mid-2026). Implies Jackson 3 (`tools.jackson.*`), Spring Security 7, Hibernate 7, Testcontainers 2 | Implemented (Phase 2) |
 | D9 | `docker compose` runs from the `docker:cli` image via `infra/compose` (host has no compose plugin; keeps D3) | Implemented (Phase 2) |
 | D10 | JWT = HS256 with a single env-provided secret while there is one service; move to RS256 + JWKS when a module is extracted | Implemented (Phase 2) |
 | D11 | Rate limiter fails **open** if Redis is down (logged + `cep.ratelimit.errors` metric); it protects capacity, it is not an authorization boundary | Implemented (Phase 2) |
 | D12 | Flyway versions are timestamps (`V20261112_0100__…`) under `db/migration/<module>/`, so modules can add migrations independently without number collisions | Implemented (Phase 2) |
+| D13 | Triggered by the external NM over REST; the internal module is renamed to Channel Dispatcher | Approved 2026-11-13 |
+| D14 | Shared up to campaign evaluation, then three separate channel adapters; no generic notification webhook. Replaces "single path" | Approved 2026-11-13 |
+| D15 | App Inbox content and read state belong to the MS APIs; `inbox_messages` and `/customers/{id}/inbox` APIs removed from M1AIAlert | Approved 2026-11-13 |
+| D16 | Real integrations (NM SMS webhook, FCM, MS Store Messages), each with a mock for local and test profiles. Supersedes D7. Real sends still need credentials and a `prod` profile | Approved 2026-11-13 |
+| D17 | SMS is handed to NM, which sends through its SMS Gateway and owns DLRs; NM only acks, so `SUBMITTED_TO_NM` is final | Approved 2026-11-13 |
+| D18 | M1AIAlert proposes the NM SMS webhook contract (NOTIFICATION_CHANNEL_ARCHITECTURE.md §6.2a), pending NM confirmation | Approved 2026-11-13 |

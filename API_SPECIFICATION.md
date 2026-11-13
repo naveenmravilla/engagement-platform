@@ -42,7 +42,10 @@ Base path is `/api/v1`. All APIs use JSON. Live OpenAPI is served at `/v3/api-do
 | GET | /customers/{id}/activity | JWT VIEWER | merged timeline: events, executions, notifications |
 | GET/PUT | /customers/{id}/preferences | API key / JWT | consent per channel |
 | POST | /customers/{id}/devices | API key | register push token |
-| — | /customers/{id}/inbox… | API key / JWT | see NOTIFICATION_MANAGER_DESIGN |
+| POST | /alerts/trigger | API key (NM) | NM trigger: `{nmRequestId, channel, campaignId, customer, variables}` → `202 {notificationId, correlationId}`. Idempotent on `nmRequestId` (D13) |
+| PUT/DELETE | /customers/{id}/devices/{deviceId} | API key | push token refresh / deactivate on logout |
+| POST | /sdk/events | API key (MyM1+ SDK) | `notification_impression`, `notification_opened` |
+| — | ~~/customers/{id}/inbox…~~ | — | **Removed (D15).** MyM1+ uses the MS APIs |
 | GET | /analytics/journeys/{id} · /analytics/notifications · /analytics/overview | JWT VIEWER | |
 | POST | /auth/login | — | `{tenant, email, password}` → `{accessToken, tokenType, expiresIn}` · **implemented** |
 | GET | /auth/me | any | caller identity, tenant, authorities · **implemented** |

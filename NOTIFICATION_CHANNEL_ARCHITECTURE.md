@@ -1,6 +1,6 @@
 # Notification Channel Architecture: SMS, Push and App Inbox
 
-Status: **Proposed, awaiting approval** (decisions D13–D17 in §7)
+Status: **Approved 2026-11-13** (decisions D13–D18 in §7). Open questions Q3–Q6 remain (§8).
 
 This document defines three **separate** notification channels for M1AIAlert (this platform). Each channel has its own owner, delivery path and callback or persistence contract. They are not built on a shared generic notification webhook.
 
@@ -17,7 +17,7 @@ Rendered images: [`diagrams/channel-e2e.svg`](diagrams/channel-e2e.svg) (end-to-
 | **MyM1+** | M1's customer mobile app, with the M1AIAlert SDK and the Firebase SDK | Showing push notifications, deep links and the App Inbox UI |
 | **MS APIs** | M1 microservices: Store Messages, Fetch All Messages, Read Messages, Fetch Unread Count | App Inbox storage and read/unread status |
 
-> **Naming collision.** The existing design docs use "Notification Manager" for M1AIAlert's *internal* dispatch module. To keep it distinct from the external **NM**, this document calls that module the **Channel Dispatcher**. If D13 is approved, the module will be renamed to match.
+> **Naming collision.** The existing design docs use "Notification Manager" for M1AIAlert's *internal* dispatch module. To keep it distinct from the external **NM**, this document calls that module the **Channel Dispatcher**. D13 is approved, so the module is now named Channel Dispatcher everywhere.
 
 ## 2. Channel summary (mandatory validation matrix)
 
@@ -237,9 +237,9 @@ sequenceDiagram
   Note over APP,PC: Device token lifecycle (runs independently of any campaign)
   APP->>FCM: getToken()
   FCM-->>APP: FCM registration token
-  APP->>API: POST /api/v1/devices {customerId, token, platform, appVersion}
+  APP->>API: POST /api/v1/customers/{id}/devices {token, platform, appVersion}
   API->>DB: upsert customer_devices (ACTIVE)
-  APP->>API: token refresh (onNewToken) / logout → PUT or DELETE /devices/{id}
+  APP->>API: token refresh (onNewToken) / logout → PUT or DELETE /customers/{id}/devices/{deviceId}
   end
 
   NM->>API: POST /api/v1/alerts/trigger {nmRequestId, channel: PUSH, campaignId, customer}
@@ -356,7 +356,7 @@ sequenceDiagram
 | 6.2 | SMS webhook (SEND_SMS / NOT_SENT) | M1AIAlert → NM | No existing NM contract. **Draft in §6.2a**, to be confirmed with NM. NM replies with an ack only |
 | 6.3 | SMS Gateway submit / DLR | NM ↔ SMS Gateway | NM's existing integration. Outside M1AIAlert. Not changed |
 | 6.4 | FCM HTTP v1 send | M1AIAlert → Firebase | Firebase project and service account (Q3) |
-| 6.5 | Device registration + SDK events | MyM1+ → M1AIAlert | `/api/v1/devices`, `/api/v1/sdk/events` |
+| 6.5 | Device registration + SDK events | MyM1+ → M1AIAlert | `/api/v1/customers/{id}/devices`, `/api/v1/sdk/events` |
 | 6.6 | MS Store Messages | M1AIAlert → MS | Schema, auth (OAuth2 client credentials or mTLS), idempotency header (Q5) |
 | 6.7 | MS Fetch All / Read / Unread Count | MyM1+ → MS | Owned by the MS team. Documented here only for reference |
 
@@ -410,16 +410,16 @@ X-M1A-Signature: sha256=HEX(HMAC_SHA256(secret, timestamp + "." + rawBody))
 
 **To confirm with NM:** the endpoint URL and path; HMAC shared secret or mTLS; whether NM needs extra fields such as an account or billing code; the default `senderId`; and whether NM wants `NOT_SENT` messages at all.
 
-## 7. Proposed decisions
+## 7. Decisions
 
 | # | Decision | Status |
 |---|---|---|
-| D13 | M1AIAlert is triggered by the external NM over REST. The internal "Notification Manager" module is renamed to "Channel Dispatcher" | Proposed |
-| D14 | Shared up to campaign evaluation, then three separate channel adapters (`NmSmsWebhookChannel`, `FcmPushChannel`, `MsInboxChannel`). No generic notification webhook. This replaces "single path" in ARCHITECTURE.md §1 | Proposed |
-| D15 | App Inbox content and read state belong to MS APIs. Remove `inbox_messages` and the `/customers/{id}/inbox` APIs from M1AIAlert | Proposed (removes planned functionality) |
-| D16 | Real integrations: NM SMS webhook, FCM and MS Store Messages (no SMS gateway: NM owns it). Each has a mock implementation for local and test profiles. **Changes D7** | Proposed (needs approval for real providers) |
-| D17 | M1AIAlert hands SMS to NM through the SMS webhook. NM sends the SMS through its SMS Gateway and owns DLRs and delivery tracking. NM only acknowledges receipt, so `SUBMITTED_TO_NM` is M1AIAlert's final SMS status | Proposed (gateway ownership and ack-only confirmed 2026-11-13) |
-| D18 | No NM SMS contract exists to reuse. M1AIAlert publishes the draft contract in §6.2a for NM to implement or confirm. It sits behind `NmSmsWebhookChannel`, so field names can be remapped without touching campaign logic | Proposed |
+| D13 | M1AIAlert is triggered by the external NM over REST. The internal "Notification Manager" module is renamed to "Channel Dispatcher" | **Approved 2026-11-13** |
+| D14 | Shared up to campaign evaluation, then three separate channel adapters (`NmSmsWebhookChannel`, `FcmPushChannel`, `MsInboxChannel`). No generic notification webhook. This replaces "single path" in ARCHITECTURE.md §1 | **Approved 2026-11-13** |
+| D15 | App Inbox content and read state belong to MS APIs. Remove `inbox_messages` and the `/customers/{id}/inbox` APIs from M1AIAlert | **Approved 2026-11-13** |
+| D16 | Real integrations: NM SMS webhook, FCM and MS Store Messages (no SMS gateway: NM owns it). Each has a mock implementation for local and test profiles. **Changes D7** | **Approved 2026-11-13** |
+| D17 | M1AIAlert hands SMS to NM through the SMS webhook. NM sends the SMS through its SMS Gateway and owns DLRs and delivery tracking. NM only acknowledges receipt, so `SUBMITTED_TO_NM` is M1AIAlert's final SMS status | **Approved 2026-11-13** |
+| D18 | No NM SMS contract exists to reuse. M1AIAlert publishes the draft contract in §6.2a for NM to implement or confirm. It sits behind `NmSmsWebhookChannel`, so field names can be remapped without touching campaign logic | **Approved 2026-11-13** |
 
 ## 8. Open questions (to answer before implementation)
 

@@ -1,6 +1,6 @@
 # End-to-End Architecture Diagram
 
-This page has three views: the system components (§1), a single request traced through them (§2), and how it runs in Docker Compose (§3). Details are in [ARCHITECTURE.md](ARCHITECTURE.md). Rendered images are in [`diagrams/`](diagrams/).
+This page has three views: the system components (§1), a single request traced through them (§2), and how it runs in Docker Compose (§3). Details are in [ARCHITECTURE.md](ARCHITECTURE.md). Rendered images are in [`diagrams/`](diagrams/). Channel-level flows (SMS, Push, App Inbox) are in [NOTIFICATION_CHANNEL_ARCHITECTURE.md](NOTIFICATION_CHANNEL_ARCHITECTURE.md).
 
 ## 1. System view
 
@@ -11,7 +11,7 @@ flowchart LR
     direction TB
     EXT["External applications<br/>(order, CRM, mobile backends)"]
     BIZ["Business users<br/>(marketers, admins)"]
-    DEV["Customer devices<br/>(mobile app / web)"]
+    DEV["MyM1+ app<br/>(M1AIAlert SDK + Firebase SDK)"]
   end
 
   %% ---------- Frontend ----------
@@ -55,21 +55,25 @@ flowchart LR
       REG["Node registry<br/>START · AUDIENCE · EVENT_TRIGGER<br/>CONDITION · DECISION · WAIT<br/>SMS · PUSH · APP_INBOX · WEBHOOK · END"]
     end
 
-    subgraph NM["Notification Manager"]
+    subgraph CDX["Channel Dispatcher (D13)"]
       direction TB
-      PIPE["Pipeline: template → recipient →<br/>consent → suppression → freq cap → route"]
-      SPI["ProviderAdapter SPI"]
+      TRG["NM trigger API<br/>/alerts/trigger"]
+      PIPE["Campaign evaluation: template → recipient →<br/>consent → suppression → freq cap → channel"]
+      SMSC["SMS channel<br/>NmSmsWebhookChannel"]
+      PUSHC["Push channel<br/>FcmPushChannel"]
+      INBC["App Inbox channel<br/>MsInboxChannel"]
+      TRG --> PIPE
     end
   end
 
   %% ---------- Providers ----------
-  subgraph PROV["Delivery providers"]
+  subgraph PROV["External channel systems (mocked in local / test, D16)"]
     direction TB
-    SMS["Mock SMS adapter"]
-    PUSH["Mock Push adapter"]
-    INBOX["App Inbox<br/>(first-party)"]
-    FUT["Future: Twilio · SNS · FCM · APNs<br/>(needs approval)"]
-    WH["External webhook targets<br/>(allowlisted)"]
+    NMX["NM (Notification Manager)<br/>trigger · SMS processing"]
+    GWY["SMS Gateway<br/>(connected to NM only)"]
+    FCM["Firebase FCM HTTP v1"]
+    MS["MS APIs<br/>Store · Fetch All · Read · Unread Count"]
+    WH["External webhook targets<br/>(allowlisted, journey WEBHOOK node only)"]
   end
 
   %% ---------- Data & ops ----------
@@ -84,7 +88,10 @@ flowchart LR
   EXT -- "POST /journeys/execute<br/>POST /events/ingest<br/>POST /notifications/send" --> AUTH
   BIZ --> FE
   FE -- "REST + JWT" --> AUTH
-  DEV -- "inbox API" --> AUTH
+  DEV -- "device tokens · SDK events" --> AUTH
+  DEV == "App Inbox: Fetch All · Read · Unread Count" ==> MS
+  NMX -- "POST /alerts/trigger" --> AUTH
+  AUTH -- "NM trigger" --> TRG
   AUTH --> RL
   RL --> SYNC
   RL -- "start execution" --> RUN
@@ -103,9 +110,14 @@ flowchart LR
   REG -- "SMS / PUSH / INBOX node" --> OUT
   PIPE --> TPL
   PIPE --> PREF
-  PIPE --> SPI
-  SPI --> SMS & PUSH & INBOX
-  SPI -.-> FUT
+  PIPE -- SMS --> SMSC
+  PIPE -- PUSH --> PUSHC
+  PIPE -- APP_INBOX --> INBC
+  SMSC == "SMS webhook (ack only)" ==> NMX
+  NMX -- "submit SMS · DLR" --> GWY
+  PUSHC == "messages:send" ==> FCM
+  FCM == "deliver" ==> DEV
+  INBC == "Store Messages" ==> MS
   REG -- "WEBHOOK node" --> WH
 
   CEP == "all modules persist here<br/>(module-owned tables)" ==> PG
@@ -118,8 +130,7 @@ flowchart LR
   classDef future stroke-dasharray:5 5,color:#666;
   class PG,RD,OUT,Q store;
   class RUN,REG engine;
-  class PIPE,SPI notif;
-  class FUT future;
+  class TRG,PIPE,SMSC,PUSHC,INBC notif;
 ```
 
 ## 2. Request lifecycle: the acceptance scenario
@@ -136,8 +147,8 @@ sequenceDiagram
   participant Q as Job queue
   participant W as Worker
   participant AU as Audience
-  participant NM as Notification Mgr
-  participant P as Mock providers / Inbox
+  participant NM as Channel Dispatcher
+  participant P as Mock NM / FCM / MS APIs
 
   App->>GW: POST /journeys/execute {requestId: REQ10001, journeyId, customerId}
   GW->>GW: API key → tenant · rate limit · schema check
@@ -159,8 +170,8 @@ sequenceDiagram
   JE->>DB: step SUCCEEDED + notification request (outbox)  [one tx]
   W->>NM: notification.dispatch (SMS)
   NM->>NM: template · consent · suppression · freq cap
-  NM->>P: send SMS (mock)
-  P-->>NM: ACCEPTED → SENT / DELIVERED
+  NM->>P: SMS webhook to NM (mock)
+  P-->>NM: 2xx ack → SUBMITTED_TO_NM (final, NM sends via its SMS Gateway)
   NM->>DB: delivery log · notify engine
 
   JE->>DB: WAIT step → job journey.wake run_at = now + 30m
@@ -168,7 +179,7 @@ sequenceDiagram
   W->>Q: lease journey.wake when run_at is reached
   W->>JE: resume → PUSH → APP_INBOX
   JE->>NM: PUSH, then APP_INBOX (each idempotent on executionId:nodeKey)
-  NM->>P: push (mock) · write inbox message
+  NM->>P: push via FCM (mock) · Store Messages in MS APIs (mock)
   JE->>DB: END → execution COMPLETED
   Note over App,P: The dashboard reads GET /executions/{id} for the step timeline and notification status.
 ```

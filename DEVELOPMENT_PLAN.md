@@ -12,7 +12,7 @@ A phase is not marked complete while any test is failing.
 | 5 | Journey management: definition schema, graph validator, drafts, publish, versions, node-type registry API | validator test matrix (cycles, orphans, branches) | Pending |
 | 6 | Journey engine: workers, handlers for all 11 node types, waits, retries, pause/resume/cancel, re-entry, event triggers | restart-survival and duplicate-request tests | Pending |
 | 7 | Frontend: app shell, auth, Journey Builder (React Flow), Journeys/Executions pages | Vitest and builder E2E | Pending |
-| 8 | Notification Manager: templates, pipeline, consent, caps, mock adapters, inbox | pipeline tests per suppression reason | Pending |
+| 8 | Channel Dispatcher (D13–D18): NM trigger API, templates, evaluation pipeline, consent, caps; SMS → NM webhook, Push → FCM, App Inbox → MS Store Messages; device token lifecycle; SDK events; real adapters plus mocks | pipeline tests per suppression reason; contract tests per adapter against mocks | Pending (needs NM, Firebase and MS answers before real adapters are enabled) |
 | 9 | Customer 360, preferences, devices, activity timeline; remaining UI pages | API and UI tests | Pending |
 | 10 | Metrics, Prometheus/Grafana dashboards, analytics read models, Analytics UI | dashboards load; metric assertions | Pending |
 | 11 | Full acceptance-scenario E2E (Playwright + API), tenant-isolation and security tests | all acceptance criteria automated | Pending |

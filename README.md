@@ -1,6 +1,6 @@
 # Customer Engagement Platform
 
-A multi-tenant, event-driven platform with three parts: audience management, a hybrid visual/API journey engine, and a centralized notification manager (SMS, Push, App Inbox).
+A multi-tenant, event-driven platform with three parts: audience management, a hybrid visual/API journey engine, and a Channel Dispatcher with separate SMS (via NM), Push (via Firebase to MyM1+) and App Inbox (via MS APIs) flows. See NOTIFICATION_CHANNEL_ARCHITECTURE.md.
 
 **Status:** Phase 2 (backend foundation: build, database, job queue, outbox, auth, RBAC) is complete. Business modules start in Phase 3. See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md).
 
@@ -59,4 +59,4 @@ curl -s localhost:8080/api/v1/auth/me -H "X-API-Key: $KEY"
 Stop the stack with `infra/compose down`. Add `-v` to also delete the database volume.
 
 ## Safety
-Development and tests use **mock notification providers only**. No real SMS or push messages are sent.
+Development and tests use **mock channel adapters only**. No real SMS, push or inbox messages are sent. Real adapters (D16) run only in the `prod` profile with real credentials.

@@ -92,13 +92,12 @@ templates(id, tenant_id, template_key, channel, version, subject, body, variable
 notification_requests(id, tenant_id, request_id, customer_id FK, channel, template_id FK,
           template_version, variables JSONB, rendered JSONB, metadata JSONB,
           execution_id FK NULL, step_id FK NULL,
-          status[ACCEPTED|SUPPRESSED|QUEUED|SENT|DELIVERED|READ|FAILED|EXPIRED],
-          suppression_reason, provider_key, provider_message_id, attempts, created_at, updated_at)
+          status[ACCEPTED|SUPPRESSED|QUEUED|SUBMITTED_TO_NM|SENT|OPENED|FAILED],
+          suppression_reason, correlation_id (NM nmRequestId), adapter_key,
+          external_message_id (nmSmsId | fcmMessageId | msMessageId), attempts, created_at, updated_at)
   UNIQUE(tenant_id, request_id); index(customer_id, created_at DESC); index(status, updated_at)
 notification_delivery_logs(id, notification_id FK, status, provider_response JSONB, created_at)
-inbox_messages(id, tenant_id, customer_id FK, notification_id FK, title, body, payload JSONB,
-          status[UNREAD|READ|ARCHIVED], expires_at, read_at, created_at)
-  index(customer_id, status, created_at DESC) WHERE status <> 'ARCHIVED'
+-- inbox_messages removed (D15): App Inbox content and read state are stored in the MS APIs
 provider_configurations(id, tenant_id, channel, provider_key, priority, config_encrypted BYTEA,
           status)  UNIQUE(tenant_id, channel, provider_key)
 ```
